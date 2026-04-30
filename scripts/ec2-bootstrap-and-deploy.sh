@@ -71,10 +71,16 @@ install_compose_fallback() {
 
 install_runtime() {
   if command -v dnf >/dev/null 2>&1; then
-    as_root dnf install -y git docker curl
+    as_root dnf install -y git docker
+    if ! command -v curl >/dev/null 2>&1; then
+      as_root dnf install -y curl-minimal || as_root dnf install -y curl --allowerasing
+    fi
     as_root dnf install -y docker-compose-plugin || true
   elif command -v yum >/dev/null 2>&1; then
-    as_root yum install -y git docker curl
+    as_root yum install -y git docker
+    if ! command -v curl >/dev/null 2>&1; then
+      as_root yum install -y curl-minimal || as_root yum install -y curl --allowerasing
+    fi
     as_root yum install -y docker-compose-plugin || true
   elif command -v apt-get >/dev/null 2>&1; then
     as_root apt-get update -y
