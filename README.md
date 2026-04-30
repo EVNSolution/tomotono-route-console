@@ -39,6 +39,10 @@ npx prisma validate
 4. Restrict server Google Maps key by server/IP.
 5. Run `docker compose up -d --build`.
 
+## EC2 deploy
+
+Deployment is prepared through GitHub Actions OIDC + AWS role ARN + SSM Run Command + Docker Compose. See `docs/ec2-deployment.md`. The deploy workflow intentionally skips browser smoke tests and only executes the EC2 compose rollout.
+
 ## Data safety
 
 Do not commit raw customer CSV files. Use anonymized/synthetic fixtures only. Avoid logging full addresses or coordinates in production logs.

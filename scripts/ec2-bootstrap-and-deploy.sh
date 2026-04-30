@@ -1,0 +1,159 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_URL="${TOMOTONO_REPO_URL:-https://github.com/EVNSolution/tomotono-route-console.git}"
+DEPLOY_BRANCH="${TOMOTONO_DEPLOY_BRANCH:-main}"
+DEPLOY_DIR="${TOMOTONO_DEPLOY_DIR:-/opt/tomotono-route-console}"
+APP_TIMEZONE="${APP_TIMEZONE:-America/Toronto}"
+AWS_REGION_VALUE="${AWS_REGION:-${TOMOTONO_AWS_REGION:-ca-central-1}}"
+POSTGRES_USER_VALUE="${POSTGRES_USER:-tomotono}"
+POSTGRES_PASSWORD_VALUE="${POSTGRES_PASSWORD:-tomotono_dev_password}"
+POSTGRES_DB_VALUE="${POSTGRES_DB:-tomotono_route_console}"
+ADMIN_PASSWORD_VALUE="${ADMIN_PASSWORD:-admin}"
+ADMIN_SESSION_TOKEN_VALUE="${ADMIN_SESSION_TOKEN:-local-dev-session-change-me}"
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY_VALUE="${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:-}"
+NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID_VALUE="${NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID:-}"
+GOOGLE_MAPS_SERVER_API_KEY_VALUE="${GOOGLE_MAPS_SERVER_API_KEY:-}"
+
+if id ec2-user >/dev/null 2>&1; then
+  DEPLOY_USER="${TOMOTONO_DEPLOY_USER:-ec2-user}"
+elif id ubuntu >/dev/null 2>&1; then
+  DEPLOY_USER="${TOMOTONO_DEPLOY_USER:-ubuntu}"
+else
+  DEPLOY_USER="${TOMOTONO_DEPLOY_USER:-$(id -un)}"
+fi
+
+as_root() {
+  if [[ "$(id -u)" == "0" ]]; then
+    "$@"
+  else
+    sudo "$@"
+  fi
+}
+
+run_as_deploy_user() {
+  if [[ "$(id -un)" == "${DEPLOY_USER}" ]]; then
+    "$@"
+  else
+    as_root sudo -u "${DEPLOY_USER}" "$@"
+  fi
+}
+
+start_docker() {
+  if command -v systemctl >/dev/null 2>&1; then
+    as_root systemctl enable --now docker
+  elif command -v service >/dev/null 2>&1; then
+    as_root service docker start
+  fi
+}
+
+install_compose_fallback() {
+  if docker compose version >/dev/null 2>&1; then
+    return
+  fi
+
+  local arch
+  case "$(uname -m)" in
+    x86_64|amd64) arch="x86_64" ;;
+    aarch64|arm64) arch="aarch64" ;;
+    *)
+      echo "Unsupported CPU architecture for Docker Compose fallback: $(uname -m)" >&2
+      exit 1
+      ;;
+  esac
+
+  as_root mkdir -p /usr/local/lib/docker/cli-plugins
+  as_root curl -fsSL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-${arch}" \
+    -o /usr/local/lib/docker/cli-plugins/docker-compose
+  as_root chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+  docker compose version >/dev/null
+}
+
+install_runtime() {
+  if command -v dnf >/dev/null 2>&1; then
+    as_root dnf install -y git docker curl
+    as_root dnf install -y docker-compose-plugin || true
+  elif command -v yum >/dev/null 2>&1; then
+    as_root yum install -y git docker curl
+    as_root yum install -y docker-compose-plugin || true
+  elif command -v apt-get >/dev/null 2>&1; then
+    as_root apt-get update -y
+    as_root apt-get install -y ca-certificates curl git docker.io
+    as_root apt-get install -y docker-compose-plugin || true
+  else
+    echo "Unsupported Linux distribution: dnf, yum, or apt-get is required." >&2
+    exit 1
+  fi
+
+  start_docker
+  install_compose_fallback
+
+  if id "${DEPLOY_USER}" >/dev/null 2>&1; then
+    as_root usermod -aG docker "${DEPLOY_USER}" || true
+  fi
+}
+
+prepare_repo() {
+  as_root mkdir -p "$(dirname "${DEPLOY_DIR}")"
+  as_root chown -R "${DEPLOY_USER}:${DEPLOY_USER}" "$(dirname "${DEPLOY_DIR}")"
+
+  if [[ -d "${DEPLOY_DIR}/.git" ]]; then
+    run_as_deploy_user git -C "${DEPLOY_DIR}" fetch --prune origin
+    run_as_deploy_user git -C "${DEPLOY_DIR}" checkout -B "${DEPLOY_BRANCH}" "origin/${DEPLOY_BRANCH}"
+    run_as_deploy_user git -C "${DEPLOY_DIR}" reset --hard "origin/${DEPLOY_BRANCH}"
+  elif [[ -e "${DEPLOY_DIR}" && -n "$(find "${DEPLOY_DIR}" -mindepth 1 -maxdepth 1 2>/dev/null || true)" ]]; then
+    echo "${DEPLOY_DIR} exists and is not an empty git checkout. Move it or set TOMOTONO_DEPLOY_DIR." >&2
+    exit 1
+  else
+    run_as_deploy_user git clone --branch "${DEPLOY_BRANCH}" "${REPO_URL}" "${DEPLOY_DIR}"
+  fi
+}
+
+write_env_if_missing() {
+  local env_file="${DEPLOY_DIR}/.env"
+  if [[ -f "${env_file}" && "${TOMOTONO_OVERWRITE_ENV:-false}" != "true" ]]; then
+    echo "Existing ${env_file} preserved."
+    return
+  fi
+
+  as_root tee "${env_file}" >/dev/null <<EOF_ENV
+DATABASE_URL="postgresql://${POSTGRES_USER_VALUE}:${POSTGRES_PASSWORD_VALUE}@db:5432/${POSTGRES_DB_VALUE}?schema=public"
+POSTGRES_USER="${POSTGRES_USER_VALUE}"
+POSTGRES_PASSWORD="${POSTGRES_PASSWORD_VALUE}"
+POSTGRES_DB="${POSTGRES_DB_VALUE}"
+ADMIN_PASSWORD="${ADMIN_PASSWORD_VALUE}"
+ADMIN_SESSION_TOKEN="${ADMIN_SESSION_TOKEN_VALUE}"
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY="${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY_VALUE}"
+NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID="${NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID_VALUE}"
+GOOGLE_MAPS_SERVER_API_KEY="${GOOGLE_MAPS_SERVER_API_KEY_VALUE}"
+APP_TIMEZONE="${APP_TIMEZONE}"
+AWS_REGION="${AWS_REGION_VALUE}"
+EOF_ENV
+  as_root chown "${DEPLOY_USER}:${DEPLOY_USER}" "${env_file}"
+  as_root chmod 600 "${env_file}"
+  echo "Created ${env_file}."
+}
+
+compose() {
+  if run_as_deploy_user docker compose version >/dev/null 2>&1; then
+    run_as_deploy_user docker compose "$@"
+  else
+    as_root docker compose "$@"
+  fi
+}
+
+deploy_compose() {
+  cd "${DEPLOY_DIR}"
+  compose up -d --build
+  compose ps
+}
+
+main() {
+  install_runtime
+  prepare_repo
+  write_env_if_missing
+  deploy_compose
+  echo "Tomotono route console deployed from ${DEPLOY_BRANCH} into ${DEPLOY_DIR}."
+}
+
+main "$@"
