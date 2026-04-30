@@ -36,9 +36,40 @@ describe('parseEasyRoutesCsv', () => {
     expect(firstStop.deliveryTip).toBe('Leave at concierge');
   });
 
-  it('rejects rows without route names or delivery dates', () => {
+  it('rejects rows without route names', () => {
     const invalid = `Route,Driver,Stop,Order Name,Address,Delivery Date\n,Jamie,1,#1,100 King St W,`;
 
-    expect(() => parseEasyRoutesCsv(invalid, { sourceFileName: 'bad.csv' })).toThrow(/route and delivery date/i);
+    expect(() => parseEasyRoutesCsv(invalid, { sourceFileName: 'bad.csv' })).toThrow(/route data/i);
+  });
+
+  it('uses a Toronto service-date fallback for EasyRoutes exports without date columns', () => {
+    const unscheduledExport = `Route,Driver,Stop,Order,Note (Order),Address,Billing name,Shipping name,Items
+Morning A,Jamie Lee,1,#1001,Leave with concierge,100 King St W,Billing Person,Shipping Person,Tomatoes x 3
+`;
+
+    const result = parseEasyRoutesCsv(unscheduledExport, {
+      sourceFileName: 'easyroutes-export.csv',
+      fallbackServiceDate: '2026-04-30',
+    });
+
+    expect(result.deliveryDays).toHaveLength(1);
+    expect(result.deliveryDays[0].serviceDate).toBe('2026-04-30');
+    expect(result.stops[0]).toMatchObject({
+      serviceDate: '2026-04-30',
+      customerName: 'Shipping Person',
+      deliveryTip: 'Leave with concierge',
+    });
+  });
+
+  it('normalizes split EasyRoutes scheduled and actual EDT date/time columns', () => {
+    const scheduledExport = `Route,Driver,Stop,Order,Address,Scheduled date,Scheduled ETA (EDT),Actual arrival date,Actual arrival time (EDT),Shipping name,Items
+Morning A,Jamie Lee,1,#1001,100 King St W,4/30/2026,9:15 AM,4/30/2026,10:05 AM,Avery Stone,Tomatoes x 3
+`;
+
+    const result = parseEasyRoutesCsv(scheduledExport, { sourceFileName: 'easyroutes-export (1).csv' });
+
+    expect(result.deliveryDays[0].serviceDate).toBe('2026-04-30');
+    expect(result.stops[0].etaLocal).toBe('2026-04-30 09:15');
+    expect(result.stops[0].actualArrivalLocal).toBe('2026-04-30 10:05');
   });
 });

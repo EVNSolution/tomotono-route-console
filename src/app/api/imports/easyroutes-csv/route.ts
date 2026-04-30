@@ -16,7 +16,7 @@ export async function POST(request: Request) {
       csvText = body.csvText;
       sourceFileName = body.sourceFileName ?? sourceFileName;
     }
-    const state = replaceWithImport(csvText, sourceFileName);
+    const state = await replaceWithImport(csvText, sourceFileName);
     return Response.json({ import: state.import, deliveryDays: state.deliveryDays, routes: state.routes });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : 'CSV import failed.' }, { status: 400 });

@@ -1,6 +1,7 @@
 FROM node:22-alpine AS deps
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV DATABASE_URL="postgresql://tomotono:tomotono_dev_password@db:5432/tomotono_route_console?schema=public"
 COPY package*.json ./
 RUN npm ci
 
