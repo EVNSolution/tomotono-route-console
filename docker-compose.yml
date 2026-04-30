@@ -9,7 +9,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - ${POSTGRES_DATA_DIR:-postgres-data}:/var/lib/postgresql/data
   app:
     build: .
     restart: unless-stopped
@@ -23,5 +23,17 @@ services:
       AWS_REGION: ${AWS_REGION:-ca-central-1}
     ports:
       - "3000:3000"
+  migrate:
+    build:
+      context: .
+      target: migrator
+    depends_on:
+      - db
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://tomotono:tomotono_dev_password@db:5432/tomotono_route_console?schema=public}
+    profiles:
+      - tools
 volumes:
   postgres-data:

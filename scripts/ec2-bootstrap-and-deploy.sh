@@ -9,6 +9,7 @@ AWS_REGION_VALUE="${AWS_REGION:-${TOMOTONO_AWS_REGION:-ca-central-1}}"
 POSTGRES_USER_VALUE="${POSTGRES_USER:-tomotono}"
 POSTGRES_PASSWORD_VALUE="${POSTGRES_PASSWORD:-tomotono_dev_password}"
 POSTGRES_DB_VALUE="${POSTGRES_DB:-tomotono_route_console}"
+POSTGRES_DATA_DIR_VALUE="${POSTGRES_DATA_DIR:-/mnt/tomotono-postgres/data}"
 ADMIN_PASSWORD_VALUE="${ADMIN_PASSWORD:-admin}"
 ADMIN_SESSION_TOKEN_VALUE="${ADMIN_SESSION_TOKEN:-local-dev-session-change-me}"
 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY_VALUE="${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:-}"
@@ -164,6 +165,7 @@ prepare_repo() {
 write_env_if_missing() {
   local env_file="${DEPLOY_DIR}/.env"
   if [[ -f "${env_file}" && "${TOMOTONO_OVERWRITE_ENV:-false}" != "true" ]]; then
+    append_env_entry "${env_file}" "POSTGRES_DATA_DIR" "${POSTGRES_DATA_DIR_VALUE}"
     echo "Existing ${env_file} preserved."
     return
   fi
@@ -173,6 +175,7 @@ DATABASE_URL="postgresql://${POSTGRES_USER_VALUE}:${POSTGRES_PASSWORD_VALUE}@db:
 POSTGRES_USER="${POSTGRES_USER_VALUE}"
 POSTGRES_PASSWORD="${POSTGRES_PASSWORD_VALUE}"
 POSTGRES_DB="${POSTGRES_DB_VALUE}"
+POSTGRES_DATA_DIR="${POSTGRES_DATA_DIR_VALUE}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD_VALUE}"
 ADMIN_SESSION_TOKEN="${ADMIN_SESSION_TOKEN_VALUE}"
 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY="${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY_VALUE}"
@@ -186,6 +189,35 @@ EOF_ENV
   echo "Created ${env_file}."
 }
 
+append_env_entry() {
+  local env_file="$1"
+  local key="$2"
+  local value="$3"
+
+  if ! as_root grep -q "^${key}=" "${env_file}"; then
+    printf '%s="%s"\n' "${key}" "${value}" | as_root tee -a "${env_file}" >/dev/null
+    as_root chown "${DEPLOY_USER}:${DEPLOY_USER}" "${env_file}"
+    as_root chmod 600 "${env_file}"
+    echo "Added ${key} to ${env_file}."
+  fi
+}
+
+prepare_postgres_data_dir() {
+  if [[ "${POSTGRES_DATA_DIR_VALUE}" != /* ]]; then
+    return
+  fi
+
+  if [[ "${POSTGRES_DATA_DIR_VALUE}" == /mnt/tomotono-postgres/* ]] && command -v mountpoint >/dev/null 2>&1; then
+    mountpoint -q /mnt/tomotono-postgres || {
+      echo "/mnt/tomotono-postgres is not mounted. Attach and mount the Postgres EBS volume first." >&2
+      exit 1
+    }
+  fi
+
+  as_root mkdir -p "${POSTGRES_DATA_DIR_VALUE}"
+  as_root chmod 700 "${POSTGRES_DATA_DIR_VALUE}"
+}
+
 compose() {
   if run_as_deploy_user docker compose version >/dev/null 2>&1; then
     run_as_deploy_user docker compose "$@"
@@ -194,9 +226,25 @@ compose() {
   fi
 }
 
+wait_for_database() {
+  for _ in $(seq 1 60); do
+    if compose exec -T db pg_isready -U "${POSTGRES_USER_VALUE}" -d "${POSTGRES_DB_VALUE}" >/dev/null 2>&1; then
+      return
+    fi
+    sleep 2
+  done
+
+  echo "Timed out waiting for PostgreSQL to accept connections." >&2
+  exit 1
+}
+
 deploy_compose() {
   cd "${DEPLOY_DIR}"
-  compose up -d --build
+  compose up -d db
+  wait_for_database
+  compose build app migrate
+  compose run --rm migrate
+  compose up -d app
   compose ps
 }
 
@@ -204,6 +252,7 @@ main() {
   install_runtime
   prepare_repo
   write_env_if_missing
+  prepare_postgres_data_dir
   deploy_compose
   echo "Tomotono route console deployed from ${DEPLOY_BRANCH} into ${DEPLOY_DIR}."
 }
