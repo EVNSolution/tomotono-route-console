@@ -54,10 +54,20 @@ COMMAND_ID="$(aws ssm send-command \
 
 echo "ssm_command_id=${COMMAND_ID}"
 
-TARGET_COUNT="$(aws ssm list-command-invocations --region "${AWS_REGION}" --command-id "${COMMAND_ID}" --query 'length(CommandInvocations)' --output text 2>/dev/null || echo 0)"
-if [[ "${TARGET_COUNT}" == "0" ]]; then
-  echo "SSM command was created. Waiting briefly for target invocation registration..."
+TARGET_COUNT="0"
+for _ in $(seq 1 6); do
+  TARGET_COUNT="$(aws ssm list-command-invocations --region "${AWS_REGION}" --command-id "${COMMAND_ID}" --query 'length(CommandInvocations)' --output text 2>/dev/null || echo 0)"
+  if [[ "${TARGET_COUNT}" != "0" ]]; then
+    break
+  fi
+  echo "SSM command was created, but no target invocation is registered yet. Waiting for target registration..."
   sleep 5
+done
+
+if [[ "${TARGET_COUNT}" == "0" ]]; then
+  echo "No SSM targets matched ${TOMOTONO_SSM_TARGET_KEY}=${TOMOTONO_SSM_TARGET_VALUE} in ${AWS_REGION}." >&2
+  echo "Ensure the EC2 instance is SSM-managed, online, in ${AWS_REGION}, and tagged for this target." >&2
+  exit 1
 fi
 
 if [[ "${TOMOTONO_WAIT_FOR_COMPLETION}" != "true" ]]; then
