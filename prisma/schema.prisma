@@ -1,0 +1,122 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ImportStatus {
+  parsed
+  failed
+}
+
+enum RouteReviewStatus {
+  draft
+  in_review
+  confirmed
+}
+
+enum StopStatus {
+  pending
+  arrived
+  skipped
+  issue
+}
+
+model DeliveryImport {
+  id             String       @id @default(cuid())
+  sourceFileName String
+  importedAt     DateTime     @default(now())
+  rowCount       Int
+  status         ImportStatus @default(parsed)
+  routes         Route[]
+}
+
+model DeliveryDay {
+  id          String   @id @default(cuid())
+  serviceDate DateTime @db.Date
+  timezone    String   @default("America/Toronto")
+  routes      Route[]
+  stops       RouteStop[]
+  @@unique([serviceDate])
+}
+
+model Driver {
+  id     String  @id @default(cuid())
+  name   String  @unique
+  routes Route[]
+}
+
+model Route {
+  id               String            @id @default(cuid())
+  importId         String?
+  deliveryDayId    String
+  driverId         String?
+  routeName        String
+  status           RouteReviewStatus @default(draft)
+  firstEtaLocal    String?
+  lastEtaLocal     String?
+  deliveryImport   DeliveryImport?   @relation(fields: [importId], references: [id])
+  deliveryDay      DeliveryDay       @relation(fields: [deliveryDayId], references: [id])
+  driver           Driver?           @relation(fields: [driverId], references: [id])
+  stops            RouteStop[]
+  deliveryTips     DeliveryTip[]
+  routeReviewLogs  RouteReviewLog[]
+  @@index([deliveryDayId, routeName])
+}
+
+model Order {
+  id          String      @id @default(cuid())
+  orderNumber String      @unique
+  customerName String
+  itemSummary  String?
+  stops        RouteStop[]
+}
+
+model RouteStop {
+  id                 String     @id @default(cuid())
+  routeId            String
+  deliveryDayId       String
+  orderId             String?
+  sequence            Int
+  fullAddress         String
+  city                String?
+  province            String?
+  postalCode          String?
+  latitude            Decimal?   @db.Decimal(10, 7)
+  longitude           Decimal?   @db.Decimal(10, 7)
+  etaLocal            String?
+  actualArrivalLocal  String?
+  timezone            String     @default("America/Toronto")
+  deliveryTip         String?
+  dispatcherMemo      String?
+  status              StopStatus @default(pending)
+  route               Route      @relation(fields: [routeId], references: [id])
+  deliveryDay         DeliveryDay @relation(fields: [deliveryDayId], references: [id])
+  order               Order?     @relation(fields: [orderId], references: [id])
+  tips                DeliveryTip[]
+  @@unique([routeId, sequence])
+  @@index([deliveryDayId])
+}
+
+model DeliveryTip {
+  id                 String    @id @default(cuid())
+  stopId             String?
+  routeId            String?
+  addressFingerprint String
+  body               String
+  createdAt          DateTime  @default(now())
+  stop               RouteStop? @relation(fields: [stopId], references: [id])
+  route              Route?    @relation(fields: [routeId], references: [id])
+  @@index([addressFingerprint])
+}
+
+model RouteReviewLog {
+  id        String            @id @default(cuid())
+  routeId   String
+  status    RouteReviewStatus
+  note      String?
+  createdAt DateTime          @default(now())
+  route     Route             @relation(fields: [routeId], references: [id])
+}
