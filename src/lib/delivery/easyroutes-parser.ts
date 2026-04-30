@@ -1,28 +1,29 @@
 import { parse } from 'csv-parse/sync';
 import { DEFAULT_TIMEZONE, type DeliveryDay, type DeliveryImport, type DeliveryRoute, type ParsedDeliveryData, type RouteStop } from './types';
 
-interface ParseOptions { sourceFileName: string; timezone?: string; }
+interface ParseOptions { sourceFileName: string; timezone?: string; fallbackServiceDate?: string; }
 type CsvRow = Record<string, string | undefined>;
 
 const routeHeaders = ['Route', 'Route Name', 'Route name', 'route'];
 const driverHeaders = ['Driver', 'Driver Name', 'Driver name'];
 const stopHeaders = ['Stop', 'Stop Number', 'Stop #', 'Sequence', 'Order'];
 const orderHeaders = ['Order Name', 'Order', 'Order Number', 'Order #', 'Name'];
-const customerHeaders = ['Customer Name', 'Customer', 'Recipient'];
+const customerHeaders = ['Customer Name', 'Customer', 'Recipient', 'Shipping name', 'Billing name'];
 const addressHeaders = ['Address', 'Shipping Address', 'Street', 'Address 1'];
 const cityHeaders = ['City', 'Shipping City'];
 const provinceHeaders = ['Province', 'State', 'Shipping Province'];
 const postalHeaders = ['Postal Code', 'Zip', 'ZIP', 'Shipping Zip'];
 const latitudeHeaders = ['Latitude', 'Lat', 'Stop Latitude'];
 const longitudeHeaders = ['Longitude', 'Lng', 'Lon', 'Stop Longitude'];
-const etaHeaders = ['ETA', 'Estimated Arrival', 'Estimated arrival time'];
-const actualHeaders = ['Actual Arrival', 'Actual arrival', 'Arrived At', 'Delivered At'];
+const etaHeaders = ['ETA', 'Estimated Arrival', 'Estimated arrival time', 'Scheduled ETA (EDT)', 'Updated ETA (EDT)'];
+const actualHeaders = ['Actual Arrival', 'Actual arrival', 'Arrived At', 'Delivered At', 'Actual arrival time (EDT)'];
 const itemsHeaders = ['Items', 'Products', 'Item Summary', 'Lineitems'];
-const dateHeaders = ['Delivery Date', 'Date', 'Service Date', 'Scheduled Date'];
-const tipHeaders = ['Delivery Instructions', 'Instructions', 'Notes', 'Delivery Tip'];
+const dateHeaders = ['Delivery Date', 'Date', 'Service Date', 'Scheduled Date', 'Scheduled date', 'Updated date', 'Actual arrival date'];
+const tipHeaders = ['Delivery Instructions', 'Instructions', 'Notes', 'Delivery Tip', 'Note (Order)', 'Proof of delivery note'];
 
 export function parseEasyRoutesCsv(csvText: string, options: ParseOptions): ParsedDeliveryData {
   const timezone = options.timezone ?? DEFAULT_TIMEZONE;
+  const fallbackServiceDate = options.fallbackServiceDate ?? todayInTimezone();
   const rows = parse(csvText, { columns: true, skip_empty_lines: true, trim: true, bom: true }) as CsvRow[];
   if (rows.length === 0) throw new Error('CSV contains no delivery rows.');
 
@@ -32,8 +33,8 @@ export function parseEasyRoutesCsv(csvText: string, options: ParseOptions): Pars
 
   rows.forEach((row, rowIndex) => {
     const routeName = getValue(row, routeHeaders);
-    const serviceDate = normalizeDate(getValue(row, dateHeaders) || getValue(row, etaHeaders));
-    if (!routeName || !serviceDate) throw new Error(`Every delivery row must include route and delivery date. Row ${rowIndex + 2} is missing route and delivery date data.`);
+    if (!routeName) throw new Error(`Every delivery row must include route data. Row ${rowIndex + 2} is missing route data.`);
+    const serviceDate = normalizeDate(getValue(row, dateHeaders) || getValue(row, etaHeaders)) ?? fallbackServiceDate;
 
     const driverName = getValue(row, driverHeaders) || 'Unassigned';
     const deliveryDayId = stableId('day', serviceDate);
@@ -44,8 +45,8 @@ export function parseEasyRoutesCsv(csvText: string, options: ParseOptions): Pars
     const postalCode = getValue(row, postalHeaders);
     const street = getValue(row, addressHeaders);
     const fullAddress = buildAddress(street, city, province, postalCode);
-    const etaLocal = normalizeLocalDateTime(getValue(row, etaHeaders));
-    const actualArrivalLocal = normalizeLocalDateTime(getValue(row, actualHeaders));
+    const etaLocal = normalizeLocalDateTime(getValue(row, etaHeaders), serviceDate);
+    const actualArrivalLocal = normalizeLocalDateTime(getValue(row, actualHeaders), normalizeDate(getValue(row, ['Actual arrival date'])) ?? serviceDate);
 
     if (!deliveryDaysByDate.has(serviceDate)) deliveryDaysByDate.set(serviceDate, { id: deliveryDayId, serviceDate, timezone, routeCount: 0, stopCount: 0, confirmedRouteCount: 0 });
     if (!routesByKey.has(routeId)) routesByKey.set(routeId, { id: routeId, deliveryDayId, serviceDate, routeName, driverName, stopCount: 0, reviewedStopCount: 0, status: 'draft' });
@@ -88,17 +89,40 @@ function getValue(row: CsvRow, candidates: string[]): string | undefined {
 }
 function normalizeHeader(header: string): string { return header.toLowerCase().replace(/[^a-z0-9]/g, ''); }
 function normalizeDate(value?: string): string | undefined { return normalizeLocalDateTime(value)?.slice(0, 10); }
-function normalizeLocalDateTime(value?: string): string | undefined {
+function normalizeLocalDateTime(value?: string, fallbackDate?: string): string | undefined {
   if (!value) return undefined;
   const trimmed = value.trim();
   const isoLike = trimmed.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{1,2}:\d{2})/);
   if (isoLike) return `${isoLike[1]} ${isoLike[2].padStart(5, '0')}`;
   const dateOnly = trimmed.match(/^(\d{4}-\d{2}-\d{2})$/);
   if (dateOnly) return `${dateOnly[1]} 00:00`;
+  const slashDate = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (slashDate) return `${slashDate[3]}-${slashDate[1].padStart(2, '0')}-${slashDate[2].padStart(2, '0')} 00:00`;
+  const timeOnly = trimmed.match(/^(\d{1,2}):(\d{2})(?:\s*([AP]M))?$/i);
+  if (timeOnly && fallbackDate) {
+    let hour = Number.parseInt(timeOnly[1], 10);
+    const minute = timeOnly[2];
+    const meridiem = timeOnly[3]?.toUpperCase();
+    if (meridiem === 'PM' && hour < 12) hour += 12;
+    if (meridiem === 'AM' && hour === 12) hour = 0;
+    return `${fallbackDate} ${String(hour).padStart(2, '0')}:${minute}`;
+  }
   const parsed = new Date(trimmed);
   if (!Number.isNaN(parsed.getTime())) return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')} ${String(parsed.getHours()).padStart(2, '0')}:${String(parsed.getMinutes()).padStart(2, '0')}`;
-  return trimmed;
+  return fallbackDate ? `${fallbackDate} ${trimmed}` : trimmed;
 }
 function buildAddress(street?: string, city?: string, province?: string, postalCode?: string): string { const locality = [city, province].filter(Boolean).join(', '); const region = [locality, postalCode].filter(Boolean).join(' '); return [street, region].filter(Boolean).join(', ') || 'Address unavailable'; }
 function parseOptionalNumber(value?: string): number | undefined { if (!value) return undefined; const parsed = Number.parseFloat(value); return Number.isFinite(parsed) ? parsed : undefined; }
+function todayInTimezone(): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: DEFAULT_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const year = parts.find((part) => part.type === 'year')?.value;
+  const month = parts.find((part) => part.type === 'month')?.value;
+  const day = parts.find((part) => part.type === 'day')?.value;
+  return year && month && day ? `${year}-${month}-${day}` : new Date().toISOString().slice(0, 10);
+}
 export function stableId(...parts: string[]): string { const input = parts.join('|'); let hash = 2166136261; for (let i = 0; i < input.length; i += 1) { hash ^= input.charCodeAt(i); hash = Math.imul(hash, 16777619); } return `${parts[0]}_${(hash >>> 0).toString(16)}`; }

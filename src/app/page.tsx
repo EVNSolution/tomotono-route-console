@@ -6,8 +6,10 @@ import { Metric, Panel } from '@/components/ui/panel';
 import { getDeliveryState } from '@/lib/delivery/store';
 import { DEFAULT_AWS_REGION, DEFAULT_TIMEZONE } from '@/lib/delivery/types';
 
-export default function Home() {
-  const state = getDeliveryState();
+export const dynamic = 'force-dynamic';
+
+export default async function Home() {
+  const state = await getDeliveryState();
   const totalStops = state.stops.length;
   const arrivedStops = state.stops.filter((stop) => stop.status === 'arrived').length;
   return <main className="min-h-screen px-5 py-5 lg:px-8">

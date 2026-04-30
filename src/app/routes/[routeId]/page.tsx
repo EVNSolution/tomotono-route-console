@@ -7,9 +7,11 @@ import { Button } from '@/components/ui/button';
 import { Metric, Panel } from '@/components/ui/panel';
 import { getRouteDetail } from '@/lib/delivery/store';
 
+export const dynamic = 'force-dynamic';
+
 export default async function RouteDetailPage({ params }: { params: Promise<{ routeId: string }> }) {
   const { routeId } = await params;
-  const detail = getRouteDetail(routeId);
+  const detail = await getRouteDetail(routeId);
   if (!detail) notFound();
   const { route, stops } = detail;
   const arrived = stops.filter((stop) => stop.status === 'arrived').length;
