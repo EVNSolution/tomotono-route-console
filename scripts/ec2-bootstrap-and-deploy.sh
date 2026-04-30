@@ -47,6 +47,51 @@ start_docker() {
   fi
 }
 
+buildx_meets_min_version() {
+  local current min_version
+  min_version="0.17.0"
+  current="$(
+    docker buildx version 2>/dev/null \
+      | awk '{ for (i = 1; i <= NF; i++) if ($i ~ /^v?[0-9]+\\.[0-9]+\\.[0-9]+/) { gsub(/^v/, "", $i); print $i; exit } }'
+  )"
+
+  [[ -n "${current}" ]] || return 1
+  [[ "$(printf '%s\n%s\n' "${min_version}" "${current}" | sort -V | head -n 1)" == "${min_version}" ]]
+}
+
+install_buildx_fallback() {
+  if buildx_meets_min_version; then
+    return
+  fi
+
+  local arch buildx_version
+  case "$(uname -m)" in
+    x86_64|amd64) arch="amd64" ;;
+    aarch64|arm64) arch="arm64" ;;
+    *)
+      echo "Unsupported CPU architecture for Docker Buildx fallback: $(uname -m)" >&2
+      exit 1
+      ;;
+  esac
+
+  buildx_version="${TOMOTONO_BUILDX_VERSION:-}"
+  if [[ -z "${buildx_version}" ]]; then
+    buildx_version="$(
+      curl -fsSL https://api.github.com/repos/docker/buildx/releases/latest \
+        | sed -n 's/.*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/p' \
+        | head -n 1
+    )"
+  fi
+  [[ -n "${buildx_version}" ]] || { echo "Unable to resolve Docker Buildx release version." >&2; exit 1; }
+  [[ "${buildx_version}" == v* ]] || buildx_version="v${buildx_version}"
+
+  as_root mkdir -p /usr/local/lib/docker/cli-plugins
+  as_root curl -fsSL "https://github.com/docker/buildx/releases/download/${buildx_version}/buildx-${buildx_version}.linux-${arch}" \
+    -o /usr/local/lib/docker/cli-plugins/docker-buildx
+  as_root chmod +x /usr/local/lib/docker/cli-plugins/docker-buildx
+  buildx_meets_min_version
+}
+
 install_compose_fallback() {
   if docker compose version >/dev/null 2>&1; then
     return
@@ -92,6 +137,7 @@ install_runtime() {
   fi
 
   start_docker
+  install_buildx_fallback
   install_compose_fallback
 
   if id "${DEPLOY_USER}" >/dev/null 2>&1; then
