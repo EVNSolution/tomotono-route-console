@@ -12,7 +12,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
-    "docker": "docker compose up --build"
+    "docker": "docker compose up --build",
+    "deploy:ssm": "scripts/dispatch-ec2-deploy-ssm.sh"
   },
   "dependencies": {
     "@googlemaps/js-api-loader": "^2.0.2",
