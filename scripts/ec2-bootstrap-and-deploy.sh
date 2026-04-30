@@ -52,7 +52,7 @@ buildx_meets_min_version() {
   min_version="0.17.0"
   current="$(
     docker buildx version 2>/dev/null \
-      | awk '{ for (i = 1; i <= NF; i++) if ($i ~ /^v?[0-9]+\\.[0-9]+\\.[0-9]+/) { gsub(/^v/, "", $i); print $i; exit } }'
+      | awk '{ for (i = 1; i <= NF; i++) if ($i ~ /^v?[0-9]+[.][0-9]+[.][0-9]+/) { gsub(/^v/, "", $i); print $i; exit } }'
   )"
 
   [[ -n "${current}" ]] || return 1
