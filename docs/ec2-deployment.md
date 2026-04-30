@@ -6,8 +6,8 @@ This repo deploys to EC2 through GitHub Actions OIDC, an AWS role ARN, SSM Run C
 
 The workflow reads these variables, in order:
 
-- AWS role ARN: `TOMOTONO_AWS_ROLE_ARN`, fallback `PROD_AWS_ROLE_ARN`, fallback `GH_ACTIONS_PROD_DEPLOY_ROLE_ARN`. These can be either GitHub organization/repository variables or secrets, so the existing organization common ARN secret can be reused.
-- AWS region: `TOMOTONO_AWS_REGION`, fallback `AWS_REGION`, fallback `ca-central-1`.
+- AWS role ARN: `TOMOTONO_AWS_ROLE_ARN`, fallback `PROD_AWS_ROLE_ARN`, fallback `GH_ACTIONS_PROD_DEPLOY_ROLE_ARN`, then the shared GitHub Actions role secrets used by other EV&S workflows. These can be GitHub organization/repository/environment variables or secrets; the deploy job runs in the `prod` environment so existing environment-level role references can be reused.
+- AWS region: `TOMOTONO_AWS_REGION`, fallback `ca-central-1`. The generic organization `AWS_REGION` is intentionally not used because this service targets Canada Central.
 - SSM target: `TOMOTONO_SSM_TARGET_KEY` / `TOMOTONO_SSM_TARGET_VALUE`, default `tag:Service=tomotono-route-console`.
 - Deploy directory: `TOMOTONO_DEPLOY_DIR`, default `/opt/tomotono-route-console`.
 - Deploy branch: `TOMOTONO_DEPLOY_BRANCH`, default `main` for manual runs.
