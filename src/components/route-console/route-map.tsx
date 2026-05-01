@@ -48,18 +48,17 @@ export function RouteMap({
   const ref = useRef<HTMLDivElement>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const hasApiKey = Boolean(apiKey);
-  const hasLocatedStops = stops.some((stop) => typeof stop.latitude === 'number' && typeof stop.longitude === 'number');
   const mapCenter = useMemo(() => {
     const firstLocatedStop = stops.find((stop) => typeof stop.latitude === 'number' && typeof stop.longitude === 'number');
     return firstLocatedStop
       ? { lat: firstLocatedStop.latitude!, lng: firstLocatedStop.longitude! }
       : { lat: 43.6532, lng: -79.3832 };
   }, [stops]);
-  const initialZoom = hasLocatedStops ? 11 : 10;
+  const initialZoom = 10;
   const fallbackMapUrl = buildOpenStreetMapEmbedUrl(stops);
 
   useEffect(() => {
-    if (!apiKey || !hasLocatedStops || !ref.current) return;
+    if (!apiKey || !ref.current) return;
     const locatedStops = stops.filter((stop) => typeof stop.latitude === 'number' && typeof stop.longitude === 'number');
     const mapRef = ref.current;
     let cancelled = false;
@@ -109,15 +108,13 @@ export function RouteMap({
       cancelled = true;
       window.clearTimeout(fallbackTimer);
     };
-  }, [apiKey, mapId, mapCenter, initialZoom, stops, hasLocatedStops]);
+  }, [apiKey, mapId, mapCenter, initialZoom, stops]);
 
   const statusMessage = loadFailed
     ? 'Google Maps load failed. Check API key, billing, referrer, or browser console for details.'
-    : !hasLocatedStops
-      ? '좌표 데이터가 없어 임시 미리보기 맵을 표시합니다.'
-      : '';
+    : 'Google Maps rendered successfully.';
 
-  if (loadFailed || !hasApiKey || !hasLocatedStops) {
+  if (loadFailed || !hasApiKey) {
     return <div key="route-map-fallback" className="relative h-[460px] overflow-hidden rounded-xl border border-[rgba(255,255,255,0.08)] bg-[#090a0b] operations-grid">
       <iframe
         src={fallbackMapUrl}
