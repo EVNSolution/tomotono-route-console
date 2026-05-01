@@ -167,10 +167,17 @@ prepare_repo() {
 write_env_if_missing() {
   local env_file="${DEPLOY_DIR}/.env"
   if [[ -f "${env_file}" && "${TOMOTONO_OVERWRITE_ENV:-false}" != "true" ]]; then
-    append_env_entry "${env_file}" "POSTGRES_DATA_DIR" "${POSTGRES_DATA_DIR_VALUE}"
-    append_env_entry "${env_file}" "TOMATONO_SSLIP_HOST" "${TOMATONO_SSLIP_HOST_VALUE}"
-    append_env_entry "${env_file}" "CADDY_ADMIN_EMAIL" "${CADDY_ADMIN_EMAIL_VALUE}"
-    echo "Existing ${env_file} preserved."
+    upsert_env_entry "${env_file}" "POSTGRES_DATA_DIR" "${POSTGRES_DATA_DIR_VALUE}" "required"
+    upsert_env_entry "${env_file}" "TOMATONO_SSLIP_HOST" "${TOMATONO_SSLIP_HOST_VALUE}" "provided"
+    upsert_env_entry "${env_file}" "CADDY_ADMIN_EMAIL" "${CADDY_ADMIN_EMAIL_VALUE}" "provided"
+    upsert_env_entry "${env_file}" "NEXT_PUBLIC_GOOGLE_MAPS_API_KEY" "${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY_VALUE}" "provided"
+    upsert_env_entry "${env_file}" "NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID" "${NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID_VALUE}" "provided"
+    upsert_env_entry "${env_file}" "GOOGLE_MAPS_SERVER_API_KEY" "${GOOGLE_MAPS_SERVER_API_KEY_VALUE}" "provided"
+    upsert_env_entry "${env_file}" "ADMIN_PASSWORD" "${ADMIN_PASSWORD:-}" "provided"
+    upsert_env_entry "${env_file}" "ADMIN_SESSION_TOKEN" "${ADMIN_SESSION_TOKEN:-}" "provided"
+    upsert_env_entry "${env_file}" "APP_TIMEZONE" "${APP_TIMEZONE}" "required"
+    upsert_env_entry "${env_file}" "AWS_REGION" "${AWS_REGION_VALUE}" "required"
+    echo "Existing ${env_file} preserved with provided deploy-time settings applied."
     return
   fi
 
@@ -195,17 +202,41 @@ EOF_ENV
   echo "Created ${env_file}."
 }
 
-append_env_entry() {
+upsert_env_entry() {
   local env_file="$1"
   local key="$2"
   local value="$3"
+  local mode="${4:-provided}"
 
-  if ! as_root grep -q "^${key}=" "${env_file}"; then
-    printf '%s="%s"\n' "${key}" "${value}" | as_root tee -a "${env_file}" >/dev/null
+  if [[ "${mode}" == "provided" && -z "${value}" ]]; then
+    return
+  fi
+
+  local escaped_value
+  escaped_value="${value//\\/\\\\}"
+  escaped_value="${escaped_value//\"/\\\"}"
+
+  if as_root grep -q "^${key}=" "${env_file}"; then
+    local tmp_file
+    tmp_file="$(mktemp)"
+    as_root awk -v key="${key}" -v value="${escaped_value}" '
+      BEGIN { replacement = key "=\"" value "\"" }
+      $0 ~ "^" key "=" { print replacement; next }
+      { print }
+    ' "${env_file}" > "${tmp_file}"
+    as_root install -m 600 -o "${DEPLOY_USER}" -g "${DEPLOY_USER}" "${tmp_file}" "${env_file}"
+    rm -f "${tmp_file}"
+    echo "Updated ${key} in ${env_file}."
+  else
+    printf '%s="%s"\n' "${key}" "${escaped_value}" | as_root tee -a "${env_file}" >/dev/null
     as_root chown "${DEPLOY_USER}:${DEPLOY_USER}" "${env_file}"
     as_root chmod 600 "${env_file}"
     echo "Added ${key} to ${env_file}."
   fi
+}
+
+append_env_entry() {
+  upsert_env_entry "$1" "$2" "$3" "required"
 }
 
 prepare_postgres_data_dir() {

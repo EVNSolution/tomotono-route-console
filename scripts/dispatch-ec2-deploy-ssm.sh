@@ -30,6 +30,7 @@ exports = {
     "NEXT_PUBLIC_GOOGLE_MAPS_API_KEY": os.environ.get("NEXT_PUBLIC_GOOGLE_MAPS_API_KEY", ""),
     "NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID": os.environ.get("NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID", ""),
     "GOOGLE_MAPS_SERVER_API_KEY": os.environ.get("GOOGLE_MAPS_SERVER_API_KEY", ""),
+    "TOMOTONO_OVERWRITE_ENV": os.environ.get("TOMOTONO_OVERWRITE_ENV", ""),
 }
 commands = [
     "set -euo pipefail",
