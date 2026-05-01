@@ -1,7 +1,7 @@
 'use client';
 
 import { importLibrary, setOptions } from '@googlemaps/js-api-loader';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { DeliveryRoute, RouteStop } from '@/lib/delivery/types';
 
 export function RouteMap({
@@ -19,44 +19,49 @@ export function RouteMap({
   const [loadFailed, setLoadFailed] = useState(false);
   const hasApiKey = Boolean(apiKey);
   const hasLocatedStops = stops.some((stop) => typeof stop.latitude === 'number' && typeof stop.longitude === 'number');
+  const mapCenter = useMemo(() => {
+    const firstLocatedStop = stops.find((stop) => typeof stop.latitude === 'number' && typeof stop.longitude === 'number');
+    return firstLocatedStop
+      ? { lat: firstLocatedStop.latitude!, lng: firstLocatedStop.longitude! }
+      : { lat: 43.6532, lng: -79.3832 };
+  }, [stops]);
+  const initialZoom = hasLocatedStops ? 11 : 10;
 
   useEffect(() => {
     if (!apiKey || !ref.current) return;
     const locatedStops = stops.filter((stop) => typeof stop.latitude === 'number' && typeof stop.longitude === 'number');
-    if (locatedStops.length === 0) return;
 
     setOptions({ key: apiKey, v: 'weekly', mapIds: mapId ? [mapId] : undefined });
     void Promise.all([importLibrary('maps'), importLibrary('marker')])
       .then(([{ Map }, { AdvancedMarkerElement }]) => {
-        const center = { lat: locatedStops[0].latitude!, lng: locatedStops[0].longitude! };
         const map = new Map(ref.current!, {
-          center,
-          zoom: 11,
+          center: mapCenter,
+          zoom: initialZoom,
           mapId,
           backgroundColor: '#08090a',
           disableDefaultUI: true,
           zoomControl: true,
         });
-        locatedStops.forEach((stop) => {
-          new AdvancedMarkerElement({
-            map,
-            position: { lat: stop.latitude!, lng: stop.longitude! },
-            title: `${stop.sequence}. ${stop.orderNumber}`,
+        if (locatedStops.length) {
+          locatedStops.forEach((stop) => {
+            new AdvancedMarkerElement({
+              map,
+              position: { lat: stop.latitude!, lng: stop.longitude! },
+              title: `${stop.sequence}. ${stop.orderNumber}`,
+            });
           });
-        });
+        }
       })
       .catch(() => setLoadFailed(true));
-  }, [apiKey, mapId, stops]);
+  }, [apiKey, mapId, mapCenter, initialZoom, stops]);
 
   const statusMessage = loadFailed
     ? 'Google Maps load failed. Check API key, billing, referrer, or browser console for details.'
-    : !hasApiKey
-      ? 'Set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to render live Google Maps.'
-      : !hasLocatedStops
-        ? 'No stop coordinates available for this route.'
-        : '';
+    : !hasLocatedStops
+      ? '지도는 표시되지만 좌표 데이터가 없어 마커는 비워집니다. CSV 업로드에서 위도/경도를 확보해 주세요.'
+      : '';
 
-  if (loadFailed || !hasApiKey || !hasLocatedStops) {
+  if (loadFailed || !hasApiKey) {
     return <div className="relative h-[460px] overflow-hidden rounded-xl border border-[rgba(255,255,255,0.08)] bg-[#090a0b] operations-grid">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_45%_45%,rgba(113,112,255,0.16),transparent_18rem)]" />
       {stops.map((stop, index) => (
