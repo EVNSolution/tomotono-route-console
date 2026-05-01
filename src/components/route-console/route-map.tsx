@@ -25,6 +25,7 @@ export function RouteMap({
       : { lat: 43.6532, lng: -79.3832 };
   }, [stops]);
   const initialZoom = 10;
+  const resolvedMapId = mapId?.trim() || undefined;
 
   useEffect(() => {
     if (!apiKey || !ref.current) {
@@ -36,14 +37,14 @@ export function RouteMap({
     const mapRef = ref.current;
     let cancelled = false;
 
-    setOptions({ key: apiKey, v: 'weekly', mapIds: mapId ? [mapId] : undefined });
+    setOptions({ key: apiKey, v: 'weekly', mapIds: resolvedMapId ? [resolvedMapId] : undefined });
     void Promise.all([importLibrary('maps'), importLibrary('marker')])
       .then(([{ Map }, { AdvancedMarkerElement }]) => {
         if (cancelled || !mapRef) return;
         const map = new Map(ref.current!, {
           center: mapCenter,
           zoom: initialZoom,
-          mapId,
+          ...(resolvedMapId ? { mapId: resolvedMapId } : undefined),
           backgroundColor: '#08090a',
           disableDefaultUI: true,
           zoomControl: true,
@@ -71,7 +72,7 @@ export function RouteMap({
     return () => {
       cancelled = true;
     };
-  }, [apiKey, mapId, mapCenter, initialZoom, stops]);
+  }, [apiKey, resolvedMapId, mapCenter, initialZoom, stops]);
 
   const statusMessage = loadFailed
     ? 'Google Maps load failed. Check API key, billing, referrer, or browser console for details.'
