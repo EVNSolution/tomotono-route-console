@@ -4,6 +4,36 @@ import { importLibrary, setOptions } from '@googlemaps/js-api-loader';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { DeliveryRoute, RouteStop } from '@/lib/delivery/types';
 
+const fallbackBbox = {
+  minLat: 43.45,
+  maxLat: 43.85,
+  minLon: -79.6,
+  maxLon: -79.17,
+};
+
+function buildOpenStreetMapEmbedUrl(stops: RouteStop[]) {
+  const locatedStops = stops.filter((stop) => typeof stop.latitude === 'number' && typeof stop.longitude === 'number');
+  if (!locatedStops.length) {
+    return `https://www.openstreetmap.org/export/embed.html?bbox=${fallbackBbox.minLon},${fallbackBbox.minLat},${fallbackBbox.maxLon},${fallbackBbox.maxLat}&layer=mapnik&marker=${(fallbackBbox.minLat + fallbackBbox.maxLat) / 2},${(fallbackBbox.minLon + fallbackBbox.maxLon) / 2}`;
+  }
+
+  const lats = locatedStops.map((stop) => stop.latitude!);
+  const lons = locatedStops.map((stop) => stop.longitude!);
+  const minLat = Math.min(...lats);
+  const maxLat = Math.max(...lats);
+  const minLon = Math.min(...lons);
+  const maxLon = Math.max(...lons);
+  const latPadding = Math.max(0.01, (maxLat - minLat) * 0.15);
+  const lonPadding = Math.max(0.01, (maxLon - minLon) * 0.15);
+  const south = Math.max(-85.05112878, minLat - latPadding);
+  const north = Math.min(85.05112878, maxLat + latPadding);
+  const west = minLon - lonPadding;
+  const east = maxLon + lonPadding;
+  const first = locatedStops[0];
+
+  return `https://www.openstreetmap.org/export/embed.html?bbox=${west},${south},${east},${north}&layer=mapnik&marker=${first.latitude},${first.longitude}`;
+}
+
 export function RouteMap({
   route,
   stops,
@@ -26,6 +56,7 @@ export function RouteMap({
       : { lat: 43.6532, lng: -79.3832 };
   }, [stops]);
   const initialZoom = hasLocatedStops ? 11 : 10;
+  const fallbackMapUrl = buildOpenStreetMapEmbedUrl(stops);
 
   useEffect(() => {
     if (!apiKey || !ref.current) return;
@@ -53,6 +84,14 @@ export function RouteMap({
         }
       })
       .catch(() => setLoadFailed(true));
+
+    const fallbackTimer = window.setTimeout(() => {
+      if (ref.current?.querySelector('.gm-err-container')) {
+        setLoadFailed(true);
+      }
+    }, 2500);
+
+    return () => window.clearTimeout(fallbackTimer);
   }, [apiKey, mapId, mapCenter, initialZoom, stops]);
 
   const statusMessage = loadFailed
@@ -63,7 +102,13 @@ export function RouteMap({
 
   if (loadFailed || !hasApiKey) {
     return <div className="relative h-[460px] overflow-hidden rounded-xl border border-[rgba(255,255,255,0.08)] bg-[#090a0b] operations-grid">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_45%_45%,rgba(113,112,255,0.16),transparent_18rem)]" />
+      <iframe
+        src={fallbackMapUrl}
+        title="Fallback map"
+        className="absolute inset-0 h-full w-full border-0"
+        loading="lazy"
+      />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-black/35 via-transparent to-black/35" />
       {stops.map((stop, index) => (
         <div
           key={stop.id}
