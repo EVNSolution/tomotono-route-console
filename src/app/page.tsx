@@ -3,12 +3,14 @@ import Link from 'next/link';
 import { CsvUpload } from '@/components/route-console/csv-upload';
 import { Button } from '@/components/ui/button';
 import { Metric, Panel } from '@/components/ui/panel';
+import { requireAdminPageSession } from '@/lib/admin-page-session';
 import { getDeliveryState } from '@/lib/delivery/store';
 import { DEFAULT_AWS_REGION, DEFAULT_TIMEZONE } from '@/lib/delivery/types';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Home() {
+  await requireAdminPageSession('/');
   const state = await getDeliveryState();
   const totalStops = state.stops.length;
   const arrivedStops = state.stops.filter((stop) => stop.status === 'arrived').length;

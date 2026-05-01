@@ -20,7 +20,7 @@ npm install
 npm run dev
 ```
 
-Default local admin password is `admin` if `ADMIN_PASSWORD` is not set. Set a strong password before any shared deployment.
+Admin login is DB-backed. Create or update an `AdminUser` row in PostgreSQL before using the console; the default identifier used by the password-only MVP login form is `tomotono_admin` (`DEFAULT_ADMIN_IDENTIFIER`). Per-login sessions are stored in `admin_sessions`, and login/logout/security audit events are stored in `admin_login_logs`.
 
 ## Verification
 
@@ -49,3 +49,7 @@ Deployment is prepared through GitHub Actions OIDC + AWS role ARN + SSM Run Comm
 ## Data safety
 
 Do not commit raw customer CSV files. Use anonymized/synthetic fixtures only. Avoid logging full addresses or coordinates in production logs.
+
+## Admin session operations
+
+See `docs/admin-auth-operations.md` for EC2 `psql` queries, login audit inspection, and retention cleanup SQL.

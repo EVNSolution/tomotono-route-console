@@ -12,6 +12,7 @@ The workflow reads these variables, in order:
 - Deploy directory: `TOMOTONO_DEPLOY_DIR`, default `/opt/tomotono-route-console`.
 - Deploy branch: `TOMOTONO_DEPLOY_BRANCH`; for manual `workflow_dispatch`, leaving the branch input blank deploys the workflow ref. On `main` push, the deploy branch is `main`.
 - Optional auto deploy switch: `TOMOTONO_DEPLOY_ENABLED=true` enables deploy on every `main` push.
+- Default admin identifier: `TOMOTONO_DEFAULT_ADMIN_IDENTIFIER`, fallback `tomotono_admin`. Passwords are validated from the DB-backed `AdminUser` row, not from environment variables.
 - 임시 HTTPS(sslip.io)용 호스트: `TOMATONO_SSLIP_HOST` (예: `13.12.14.15.sslip.io`)
 - Caddy email: `CADDY_ADMIN_EMAIL` (Let’s Encrypt ACME 인증 메일)
 - Caddy는 `--profile sslip`에서만 실행되며, 배포 스크립트는 `TOMATONO_SSLIP_HOST`가 비어있지 않을 때 자동으로 이 프로필을 사용합니다.
@@ -20,13 +21,11 @@ The workflow reads these variables, in order:
 
 Optional but recommended before real delivery data is imported:
 
-- `TOMOTONO_ADMIN_PASSWORD`
-- `TOMOTONO_ADMIN_SESSION_TOKEN`
 - `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`
 - `GOOGLE_MAPS_SERVER_API_KEY`
 - 운영 임시 공개 접속을 위한 `TOMATONO_SSLIP_HOST`는 secrets가 아닌 repository/environment variable로도 충분히 운영 가능.
 
-If admin secrets are absent, the EC2 bootstrap script writes MVP fallback values so the container can start. Replace them before importing real CSV data. The generated EC2 `.env` is chmod `600`. Later deploys preserve the file but update deploy-time values that are explicitly provided by GitHub Actions, such as `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`, sslip.io host, timezone, and region. Set `TOMOTONO_OVERWRITE_ENV=true` only when intentionally regenerating the full file.
+Admin credentials are no longer deployed through GitHub secrets. The EC2 bootstrap script removes obsolete `ADMIN_PASSWORD` and `ADMIN_SESSION_TOKEN` entries from `.env`; sessions are created per login in PostgreSQL. The generated EC2 `.env` is chmod `600`. Later deploys preserve the file but update deploy-time values that are explicitly provided by GitHub Actions, such as `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`, sslip.io host, timezone, and region. Set `TOMOTONO_OVERWRITE_ENV=true` only when intentionally regenerating the full file.
 
 ## EC2 prerequisites
 
