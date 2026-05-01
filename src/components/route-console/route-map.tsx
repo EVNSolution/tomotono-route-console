@@ -59,7 +59,7 @@ export function RouteMap({
   const fallbackMapUrl = buildOpenStreetMapEmbedUrl(stops);
 
   useEffect(() => {
-    if (!apiKey || !ref.current) return;
+    if (!apiKey || !hasLocatedStops || !ref.current) return;
     const locatedStops = stops.filter((stop) => typeof stop.latitude === 'number' && typeof stop.longitude === 'number');
     const mapRef = ref.current;
     let cancelled = false;
@@ -109,15 +109,15 @@ export function RouteMap({
       cancelled = true;
       window.clearTimeout(fallbackTimer);
     };
-  }, [apiKey, mapId, mapCenter, initialZoom, stops]);
+  }, [apiKey, mapId, mapCenter, initialZoom, stops, hasLocatedStops]);
 
   const statusMessage = loadFailed
     ? 'Google Maps load failed. Check API key, billing, referrer, or browser console for details.'
     : !hasLocatedStops
-      ? '지도는 표시되지만 좌표 데이터가 없어 마커는 비워집니다. CSV 업로드에서 위도/경도를 확보해 주세요.'
+      ? '좌표 데이터가 없어 임시 미리보기 맵을 표시합니다.'
       : '';
 
-  if (loadFailed || !hasApiKey) {
+  if (loadFailed || !hasApiKey || !hasLocatedStops) {
     return <div key="route-map-fallback" className="relative h-[460px] overflow-hidden rounded-xl border border-[rgba(255,255,255,0.08)] bg-[#090a0b] operations-grid">
       <iframe
         src={fallbackMapUrl}
