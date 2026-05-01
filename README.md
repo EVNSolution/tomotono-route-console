@@ -37,7 +37,10 @@ npx prisma validate
 2. Configure `.env` on the host; do not commit secrets.
 3. Restrict browser Google Maps key by HTTP referrer.
 4. Restrict server Google Maps key by server/IP.
-5. Run `docker compose up -d --build`.
+5. (Optional temporary HTTPS) Set `TOMATONO_SSLIP_HOST` to `<public-ip>.sslip.io` and `CADDY_ADMIN_EMAIL`, then run:
+   - `TOMATONO_SSLIP_HOST=... CADDY_ADMIN_EMAIL=... docker compose --profile sslip up -d --build app caddy`
+   - This starts a temporary Caddy reverse proxy on ports `80/443` for TLS.
+   - Without `--profile sslip`, app runs only on port `3000`.
 
 ## EC2 deploy
 

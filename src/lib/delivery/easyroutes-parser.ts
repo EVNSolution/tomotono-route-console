@@ -15,6 +15,7 @@ const provinceHeaders = ['Province', 'State', 'Shipping Province'];
 const postalHeaders = ['Postal Code', 'Zip', 'ZIP', 'Shipping Zip'];
 const latitudeHeaders = ['Latitude', 'Lat', 'Stop Latitude'];
 const longitudeHeaders = ['Longitude', 'Lng', 'Lon', 'Stop Longitude'];
+const driverLocationHeaders = ['Driver location', 'Driver Location', 'Driver Coordinates', 'Stop location', 'Location'];
 const etaHeaders = ['ETA', 'Estimated Arrival', 'Estimated arrival time', 'Scheduled ETA (EDT)', 'Updated ETA (EDT)'];
 const actualHeaders = ['Actual Arrival', 'Actual arrival', 'Arrived At', 'Delivered At', 'Actual arrival time (EDT)'];
 const itemsHeaders = ['Items', 'Products', 'Item Summary', 'Lineitems'];
@@ -56,7 +57,8 @@ export function parseEasyRoutesCsv(csvText: string, options: ParseOptions): Pars
       routeId, deliveryDayId, serviceDate, routeName, sequence: Number.isFinite(sequence) ? sequence : rowIndex + 1,
       orderNumber: getValue(row, orderHeaders) || `ROW-${rowIndex + 2}`,
       customerName: getValue(row, customerHeaders) || 'Unknown customer', fullAddress, city, province, postalCode,
-      latitude: parseOptionalNumber(getValue(row, latitudeHeaders)), longitude: parseOptionalNumber(getValue(row, longitudeHeaders)),
+      latitude: parseOptionalNumber(getValue(row, latitudeHeaders)) ?? parseDriverLocationLatitude(row),
+      longitude: parseOptionalNumber(getValue(row, longitudeHeaders)) ?? parseDriverLocationLongitude(row),
       etaLocal, actualArrivalLocal, timezone, itemSummary: getValue(row, itemsHeaders), deliveryTip: getValue(row, tipHeaders),
       status: actualArrivalLocal ? 'arrived' : 'pending',
     });
@@ -113,6 +115,25 @@ function normalizeLocalDateTime(value?: string, fallbackDate?: string): string |
 }
 function buildAddress(street?: string, city?: string, province?: string, postalCode?: string): string { const locality = [city, province].filter(Boolean).join(', '); const region = [locality, postalCode].filter(Boolean).join(' '); return [street, region].filter(Boolean).join(', ') || 'Address unavailable'; }
 function parseOptionalNumber(value?: string): number | undefined { if (!value) return undefined; const parsed = Number.parseFloat(value); return Number.isFinite(parsed) ? parsed : undefined; }
+function parseDriverLocationLatitude(row: CsvRow): number | undefined {
+  const pair = getValue(row, driverLocationHeaders);
+  if (!pair) return undefined;
+  const [lat] = parseCoordinatePair(pair);
+  return lat;
+}
+function parseDriverLocationLongitude(row: CsvRow): number | undefined {
+  const pair = getValue(row, driverLocationHeaders);
+  if (!pair) return undefined;
+  const [, lng] = parseCoordinatePair(pair);
+  return lng;
+}
+function parseCoordinatePair(value: string): [number | undefined, number | undefined] {
+  const parts = value.split(',').map((part) => part.trim());
+  if (parts.length < 2) return [undefined, undefined];
+  const lat = parseOptionalNumber(parts[0]);
+  const lng = parseOptionalNumber(parts[1]);
+  return [lat, lng];
+}
 function todayInTimezone(): string {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: DEFAULT_TIMEZONE,

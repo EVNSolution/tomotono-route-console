@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       branch:
-        description: Git branch to deploy
+        description: Git branch to deploy. Leave empty to deploy the workflow ref.
         required: false
-        default: main
+        default: ''
       ssm_target_key:
         description: SSM target key, for example tag:Service
         required: false
@@ -32,15 +32,18 @@ jobs:
       DEPLOY_ROLE_ARN: ${{ vars.TOMOTONO_AWS_ROLE_ARN || secrets.TOMOTONO_AWS_ROLE_ARN || vars.PROD_AWS_ROLE_ARN || secrets.PROD_AWS_ROLE_ARN || vars.GH_ACTIONS_PROD_DEPLOY_ROLE_ARN || secrets.GH_ACTIONS_PROD_DEPLOY_ROLE_ARN || secrets.GH_ACTIONS_INFRA_ROLE_ARN || secrets.GH_ACTIONS_DEV_DEPLOY_ROLE_ARN || secrets.GH_ACTIONS_STAGE_DEPLOY_ROLE_ARN }}
       TOMOTONO_SSM_TARGET_KEY: ${{ github.event.inputs.ssm_target_key || vars.TOMOTONO_SSM_TARGET_KEY || 'tag:Service' }}
       TOMOTONO_SSM_TARGET_VALUE: ${{ github.event.inputs.ssm_target_value || vars.TOMOTONO_SSM_TARGET_VALUE || 'tomotono-route-console' }}
-      TOMOTONO_DEPLOY_BRANCH: ${{ github.event.inputs.branch || vars.TOMOTONO_DEPLOY_BRANCH || github.ref_name }}
+      TOMOTONO_DEPLOY_BRANCH: ${{ inputs.branch || vars.TOMOTONO_DEPLOY_BRANCH || github.ref_name }}
       TOMOTONO_DEPLOY_DIR: ${{ vars.TOMOTONO_DEPLOY_DIR || '/opt/tomotono-route-console' }}
       TOMOTONO_REPO_URL: https://github.com/EVNSolution/tomotono-route-console.git
       TOMOTONO_WAIT_FOR_COMPLETION: "true"
+      TOMATONO_SSLIP_HOST: ${{ vars.TOMATONO_SSLIP_HOST }}
+      CADDY_ADMIN_EMAIL: ${{ vars.CADDY_ADMIN_EMAIL || vars.TOMATONO_CADDY_ADMIN_EMAIL }}
       TOMOTONO_ADMIN_PASSWORD: ${{ secrets.TOMOTONO_ADMIN_PASSWORD }}
       TOMOTONO_ADMIN_SESSION_TOKEN: ${{ secrets.TOMOTONO_ADMIN_SESSION_TOKEN }}
       NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${{ secrets.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY }}
       NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID: ${{ vars.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID }}
       GOOGLE_MAPS_SERVER_API_KEY: ${{ secrets.GOOGLE_MAPS_SERVER_API_KEY }}
+      TOMOTONO_OVERWRITE_ENV: ${{ vars.TOMOTONO_OVERWRITE_ENV || 'false' }}
     steps:
       - uses: actions/checkout@v6.0.2
         with:

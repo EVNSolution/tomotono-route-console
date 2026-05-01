@@ -23,11 +23,14 @@ exports = {
     "TOMOTONO_DEPLOY_DIR": os.environ["TOMOTONO_DEPLOY_DIR"],
     "APP_TIMEZONE": os.environ.get("APP_TIMEZONE", "America/Toronto"),
     "AWS_REGION": os.environ["AWS_REGION"],
+    "TOMATONO_SSLIP_HOST": os.environ.get("TOMATONO_SSLIP_HOST", ""),
+    "CADDY_ADMIN_EMAIL": os.environ.get("CADDY_ADMIN_EMAIL", ""),
     "ADMIN_PASSWORD": os.environ.get("TOMOTONO_ADMIN_PASSWORD", ""),
     "ADMIN_SESSION_TOKEN": os.environ.get("TOMOTONO_ADMIN_SESSION_TOKEN", ""),
     "NEXT_PUBLIC_GOOGLE_MAPS_API_KEY": os.environ.get("NEXT_PUBLIC_GOOGLE_MAPS_API_KEY", ""),
     "NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID": os.environ.get("NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID", ""),
     "GOOGLE_MAPS_SERVER_API_KEY": os.environ.get("GOOGLE_MAPS_SERVER_API_KEY", ""),
+    "TOMOTONO_OVERWRITE_ENV": os.environ.get("TOMOTONO_OVERWRITE_ENV", ""),
 }
 commands = [
     "set -euo pipefail",

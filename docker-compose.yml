@@ -23,6 +23,29 @@ services:
       AWS_REGION: ${AWS_REGION:-ca-central-1}
     ports:
       - "3000:3000"
+  caddy:
+    image: caddy:2
+    restart: "no"
+    depends_on:
+      - app
+    env_file:
+      - .env
+    environment:
+      CADDY_HOST: ${TOMATONO_SSLIP_HOST:-}
+      CADDY_ADMIN_EMAIL: ${CADDY_ADMIN_EMAIL:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    ports:
+      - "80:80"
+      - "443:443"
+    command:
+      - sh
+      - -c
+      - if [ -z "$$CADDY_HOST" ]; then echo "TOMATONO_SSLIP_HOST not set; skip HTTPS proxy."; exit 0; fi; caddy run --config /etc/caddy/Caddyfile
+    profiles:
+      - sslip
   migrate:
     build:
       context: .
@@ -37,3 +60,5 @@ services:
       - tools
 volumes:
   postgres-data:
+  caddy-data:
+  caddy-config:
