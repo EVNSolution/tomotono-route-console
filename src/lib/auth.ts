@@ -1,3 +1,3 @@
 export const SESSION_COOKIE = 'tomotono_admin_session';
-export const SESSION_VALUE = process.env.ADMIN_SESSION_TOKEN || 'local-dev-session-change-me';
-export const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin';
+export const ADMIN_SESSION_MAX_AGE_SECONDS = 28_800;
+export const DEFAULT_ADMIN_IDENTIFIER = process.env.DEFAULT_ADMIN_IDENTIFIER || 'tomotono_admin';

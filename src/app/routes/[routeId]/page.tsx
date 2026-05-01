@@ -5,12 +5,14 @@ import { ConfirmRouteButton, StopActions } from '@/components/route-console/stop
 import { RouteMap } from '@/components/route-console/route-map';
 import { Button } from '@/components/ui/button';
 import { Metric, Panel } from '@/components/ui/panel';
+import { requireAdminPageSession } from '@/lib/admin-page-session';
 import { getRouteDetail } from '@/lib/delivery/store';
 
 export const dynamic = 'force-dynamic';
 
 export default async function RouteDetailPage({ params }: { params: Promise<{ routeId: string }> }) {
   const { routeId } = await params;
+  await requireAdminPageSession(`/routes/${routeId}`);
   const detail = await getRouteDetail(routeId);
   if (!detail) notFound();
 

@@ -10,8 +10,7 @@ POSTGRES_USER_VALUE="${POSTGRES_USER:-tomotono}"
 POSTGRES_PASSWORD_VALUE="${POSTGRES_PASSWORD:-tomotono_dev_password}"
 POSTGRES_DB_VALUE="${POSTGRES_DB:-tomotono_route_console}"
 POSTGRES_DATA_DIR_VALUE="${POSTGRES_DATA_DIR:-/mnt/tomotono-postgres/data}"
-ADMIN_PASSWORD_VALUE="${ADMIN_PASSWORD:-admin}"
-ADMIN_SESSION_TOKEN_VALUE="${ADMIN_SESSION_TOKEN:-local-dev-session-change-me}"
+DEFAULT_ADMIN_IDENTIFIER_VALUE="${DEFAULT_ADMIN_IDENTIFIER:-tomotono_admin}"
 TOMATONO_SSLIP_HOST_VALUE="${TOMATONO_SSLIP_HOST:-}"
 CADDY_ADMIN_EMAIL_VALUE="${CADDY_ADMIN_EMAIL:-}"
 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY_VALUE="${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:-}"
@@ -168,13 +167,14 @@ write_env_if_missing() {
   local env_file="${DEPLOY_DIR}/.env"
   if [[ -f "${env_file}" && "${TOMOTONO_OVERWRITE_ENV:-false}" != "true" ]]; then
     upsert_env_entry "${env_file}" "POSTGRES_DATA_DIR" "${POSTGRES_DATA_DIR_VALUE}" "required"
+    upsert_env_entry "${env_file}" "DEFAULT_ADMIN_IDENTIFIER" "${DEFAULT_ADMIN_IDENTIFIER_VALUE}" "required"
     upsert_env_entry "${env_file}" "TOMATONO_SSLIP_HOST" "${TOMATONO_SSLIP_HOST_VALUE}" "provided"
     upsert_env_entry "${env_file}" "CADDY_ADMIN_EMAIL" "${CADDY_ADMIN_EMAIL_VALUE}" "provided"
     upsert_env_entry "${env_file}" "NEXT_PUBLIC_GOOGLE_MAPS_API_KEY" "${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY_VALUE}" "provided"
     upsert_env_entry "${env_file}" "NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID" "${NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID_VALUE}" "provided"
     upsert_env_entry "${env_file}" "GOOGLE_MAPS_SERVER_API_KEY" "${GOOGLE_MAPS_SERVER_API_KEY_VALUE}" "provided"
-    upsert_env_entry "${env_file}" "ADMIN_PASSWORD" "${ADMIN_PASSWORD:-}" "provided"
-    upsert_env_entry "${env_file}" "ADMIN_SESSION_TOKEN" "${ADMIN_SESSION_TOKEN:-}" "provided"
+    delete_env_entry "${env_file}" "ADMIN_PASSWORD"
+    delete_env_entry "${env_file}" "ADMIN_SESSION_TOKEN"
     upsert_env_entry "${env_file}" "APP_TIMEZONE" "${APP_TIMEZONE}" "required"
     upsert_env_entry "${env_file}" "AWS_REGION" "${AWS_REGION_VALUE}" "required"
     echo "Existing ${env_file} preserved with provided deploy-time settings applied."
@@ -187,8 +187,7 @@ POSTGRES_USER="${POSTGRES_USER_VALUE}"
 POSTGRES_PASSWORD="${POSTGRES_PASSWORD_VALUE}"
 POSTGRES_DB="${POSTGRES_DB_VALUE}"
 POSTGRES_DATA_DIR="${POSTGRES_DATA_DIR_VALUE}"
-ADMIN_PASSWORD="${ADMIN_PASSWORD_VALUE}"
-ADMIN_SESSION_TOKEN="${ADMIN_SESSION_TOKEN_VALUE}"
+DEFAULT_ADMIN_IDENTIFIER="${DEFAULT_ADMIN_IDENTIFIER_VALUE}"
 TOMATONO_SSLIP_HOST="${TOMATONO_SSLIP_HOST_VALUE}"
 CADDY_ADMIN_EMAIL="${CADDY_ADMIN_EMAIL_VALUE}"
 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY="${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY_VALUE}"
@@ -233,6 +232,22 @@ upsert_env_entry() {
     as_root chmod 600 "${env_file}"
     echo "Added ${key} to ${env_file}."
   fi
+}
+
+delete_env_entry() {
+  local env_file="$1"
+  local key="$2"
+
+  if ! as_root grep -q "^${key}=" "${env_file}"; then
+    return
+  fi
+
+  local tmp_file
+  tmp_file="$(mktemp)"
+  as_root awk -v key="${key}" '$0 !~ "^" key "=" { print }' "${env_file}" > "${tmp_file}"
+  as_root install -m 600 -o "${DEPLOY_USER}" -g "${DEPLOY_USER}" "${tmp_file}" "${env_file}"
+  rm -f "${tmp_file}"
+  echo "Removed obsolete ${key} from ${env_file}."
 }
 
 append_env_entry() {

@@ -1,6 +1,11 @@
+import { requireAdminSession } from '@/lib/admin-session';
 import { replaceWithImport } from '@/lib/delivery/store';
 
+export const runtime = 'nodejs';
+
 export async function POST(request: Request) {
+  const auth = await requireAdminSession(request);
+  if (!auth.ok) return auth.response;
   const contentType = request.headers.get('content-type') ?? '';
   try {
     let csvText = '';
