@@ -36,6 +36,8 @@ jobs:
       TOMOTONO_DEPLOY_DIR: ${{ vars.TOMOTONO_DEPLOY_DIR || '/opt/tomotono-route-console' }}
       TOMOTONO_REPO_URL: https://github.com/EVNSolution/tomotono-route-console.git
       TOMOTONO_WAIT_FOR_COMPLETION: "true"
+      TOMATONO_SSLIP_HOST: ${{ vars.TOMATONO_SSLIP_HOST }}
+      CADDY_ADMIN_EMAIL: ${{ vars.CADDY_ADMIN_EMAIL || vars.TOMATONO_CADDY_ADMIN_EMAIL }}
       TOMOTONO_ADMIN_PASSWORD: ${{ secrets.TOMOTONO_ADMIN_PASSWORD }}
       TOMOTONO_ADMIN_SESSION_TOKEN: ${{ secrets.TOMOTONO_ADMIN_SESSION_TOKEN }}
       NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${{ secrets.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY }}

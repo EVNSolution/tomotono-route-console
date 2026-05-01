@@ -12,6 +12,8 @@ POSTGRES_DB_VALUE="${POSTGRES_DB:-tomotono_route_console}"
 POSTGRES_DATA_DIR_VALUE="${POSTGRES_DATA_DIR:-/mnt/tomotono-postgres/data}"
 ADMIN_PASSWORD_VALUE="${ADMIN_PASSWORD:-admin}"
 ADMIN_SESSION_TOKEN_VALUE="${ADMIN_SESSION_TOKEN:-local-dev-session-change-me}"
+TOMATONO_SSLIP_HOST_VALUE="${TOMATONO_SSLIP_HOST:-}"
+CADDY_ADMIN_EMAIL_VALUE="${CADDY_ADMIN_EMAIL:-}"
 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY_VALUE="${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:-}"
 NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID_VALUE="${NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID:-}"
 GOOGLE_MAPS_SERVER_API_KEY_VALUE="${GOOGLE_MAPS_SERVER_API_KEY:-}"
@@ -166,6 +168,8 @@ write_env_if_missing() {
   local env_file="${DEPLOY_DIR}/.env"
   if [[ -f "${env_file}" && "${TOMOTONO_OVERWRITE_ENV:-false}" != "true" ]]; then
     append_env_entry "${env_file}" "POSTGRES_DATA_DIR" "${POSTGRES_DATA_DIR_VALUE}"
+    append_env_entry "${env_file}" "TOMATONO_SSLIP_HOST" "${TOMATONO_SSLIP_HOST_VALUE}"
+    append_env_entry "${env_file}" "CADDY_ADMIN_EMAIL" "${CADDY_ADMIN_EMAIL_VALUE}"
     echo "Existing ${env_file} preserved."
     return
   fi
@@ -178,6 +182,8 @@ POSTGRES_DB="${POSTGRES_DB_VALUE}"
 POSTGRES_DATA_DIR="${POSTGRES_DATA_DIR_VALUE}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD_VALUE}"
 ADMIN_SESSION_TOKEN="${ADMIN_SESSION_TOKEN_VALUE}"
+TOMATONO_SSLIP_HOST="${TOMATONO_SSLIP_HOST_VALUE}"
+CADDY_ADMIN_EMAIL="${CADDY_ADMIN_EMAIL_VALUE}"
 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY="${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY_VALUE}"
 NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID="${NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID_VALUE}"
 GOOGLE_MAPS_SERVER_API_KEY="${GOOGLE_MAPS_SERVER_API_KEY_VALUE}"
@@ -245,6 +251,9 @@ deploy_compose() {
   compose build app migrate
   compose run --rm migrate
   compose up -d app
+  if [[ -n "${TOMATONO_SSLIP_HOST_VALUE}" ]]; then
+    compose --profile sslip up -d caddy
+  fi
   compose ps
 }
 

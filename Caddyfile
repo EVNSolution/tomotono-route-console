@@ -1,0 +1,10 @@
+{
+  email {$CADDY_ADMIN_EMAIL}
+}
+
+{$CADDY_HOST} {
+  encode zstd
+  reverse_proxy app:3000 {
+    flush_interval -1
+  }
+}
