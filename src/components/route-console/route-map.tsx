@@ -61,10 +61,13 @@ export function RouteMap({
   useEffect(() => {
     if (!apiKey || !ref.current) return;
     const locatedStops = stops.filter((stop) => typeof stop.latitude === 'number' && typeof stop.longitude === 'number');
+    const mapRef = ref.current;
+    let cancelled = false;
 
     setOptions({ key: apiKey, v: 'weekly', mapIds: mapId ? [mapId] : undefined });
     void Promise.all([importLibrary('maps'), importLibrary('marker')])
       .then(([{ Map }, { AdvancedMarkerElement }]) => {
+        if (cancelled || !mapRef) return;
         const map = new Map(ref.current!, {
           center: mapCenter,
           zoom: initialZoom,
@@ -82,16 +85,30 @@ export function RouteMap({
             });
           });
         }
+        mapRef.dataset['googleMapInitialized'] = 'true';
       })
-      .catch(() => setLoadFailed(true));
+      .catch(() => {
+        if (!cancelled) {
+          if (mapRef) {
+            mapRef.innerHTML = '';
+          }
+          setLoadFailed(true);
+        }
+      });
 
     const fallbackTimer = window.setTimeout(() => {
-      if (ref.current?.querySelector('.gm-err-container')) {
+      if (cancelled || !mapRef) return;
+      const hasGoogleError = mapRef.querySelector('.gm-err-container');
+      if (hasGoogleError) {
+        mapRef.innerHTML = '';
         setLoadFailed(true);
       }
     }, 2500);
 
-    return () => window.clearTimeout(fallbackTimer);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(fallbackTimer);
+    };
   }, [apiKey, mapId, mapCenter, initialZoom, stops]);
 
   const statusMessage = loadFailed
@@ -101,7 +118,7 @@ export function RouteMap({
       : '';
 
   if (loadFailed || !hasApiKey) {
-    return <div className="relative h-[460px] overflow-hidden rounded-xl border border-[rgba(255,255,255,0.08)] bg-[#090a0b] operations-grid">
+    return <div key="route-map-fallback" className="relative h-[460px] overflow-hidden rounded-xl border border-[rgba(255,255,255,0.08)] bg-[#090a0b] operations-grid">
       <iframe
         src={fallbackMapUrl}
         title="Fallback map"
@@ -125,5 +142,5 @@ export function RouteMap({
     </div>;
   }
 
-  return <div ref={ref} className="h-[460px] overflow-hidden rounded-xl border border-[rgba(255,255,255,0.08)] bg-[#090a0b]" />;
+  return <div key="route-map-google" ref={ref} className="h-[460px] overflow-hidden rounded-xl border border-[rgba(255,255,255,0.08)] bg-[#090a0b]" />;
 }
